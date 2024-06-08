@@ -7,7 +7,10 @@ from audio_recorder_streamlit import audio_recorder
 import base64
 from io import BytesIO
 from PyPDF2 import PdfReader
+from dotenv import load_dotenv
 
+# Load environment variables from .env file
+load_dotenv()
 dotenv.load_dotenv()
 
 # Function to query and stream the response from the LLM
@@ -73,27 +76,38 @@ def main():
 
     with st.sidebar:
         st.image("utm.png", width=200)
-        default_openai_api_key = os.getenv("OPENAI_API_KEY") if os.getenv("OPENAI_API_KEY") is not None else ""  # only for development environment, otherwise it should return None
-        with st.expander("🔐 AI Settings"):
-            with st.popover("🔐 API"):
-                openai_api_key = st.text_input("Input API (https://platform.openai.com/)", value=default_openai_api_key, type="password")
+        # default_openai_api_key = os.getenv("OPENAI_API_KEY") if os.getenv("OPENAI_API_KEY") is not None else ""  # only for development environment, otherwise it should return None
+        # Define the correct password
+        api_key = os.getenv("OPENAI_API_KEY")
+        correct_password = os.getenv("CORRECT_PASSWORD")
 
-            with st.popover("✨ Model"):
-                model = st.selectbox("Select a model:", [
-                    "gpt-4o-2024-05-13",
-                    "gpt-4-turbo",
-                    "gpt-3.5-turbo-16k",
-                    "gpt-4",
-                    "gpt-4-32k",
-                ], index=0)
+        # Prompt the user for the password
+        password_input = st.text_input("Enter Password to Access AI Settings", type="password")
 
-            with st.popover("⚙️ Model parameters"):
-                model_temp = st.slider("Temperature", min_value=0.0, max_value=2.0, value=0.3, step=0.1)
+        # Check if the entered password matches the correct password
+        if password_input == correct_password:
+            with st.expander("🔐 AI Settings"):
+                with st.container():
+                    openai_api_key = st.text_input("Input API (https://platform.openai.com/)", value=api_key,
+                                                   type="password")
+        else:
+            st.warning("Incorrect password. Please try again.")
+        with st.popover("✨ Model"):
+            model = st.selectbox("Select a model:", [
+                "gpt-4o-2024-05-13",
+                "gpt-4-turbo",
+                "gpt-3.5-turbo-16k",
+                "gpt-4",
+                "gpt-4-32k",
+            ], index=0)
 
-            model_params = {
-                "model": model,
-                "temperature": model_temp,
-            }
+        with st.popover("⚙️ Model parameters"):
+            model_temp = st.slider("Temperature", min_value=0.0, max_value=2.0, value=0.3, step=0.1)
+
+        model_params = {
+            "model": model,
+            "temperature": model_temp,
+        }
 
     if openai_api_key == "" or openai_api_key is None or "sk-" not in openai_api_key:
         st.write("#")
