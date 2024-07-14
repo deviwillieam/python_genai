@@ -75,7 +75,7 @@ def main():
     # --- Side Bar ---
 
     with st.sidebar:
-        # st.image("utm.png", width=200)
+        #st.image("utm.png", width=200)
 	st.image("itb_black.png", width=200)
         # default_openai_api_key = os.getenv("OPENAI_API_KEY") if os.getenv("OPENAI_API_KEY") is not None else ""  # only for development environment, otherwise it should return None
         # Define the correct password
