@@ -95,13 +95,12 @@ def main():
         with st.popover("✨ Model"):
             model = st.selectbox("Select a model:", [
                 "gpt-4o-2024-05-13",
-                "gpt-4o",
-		"gpt-4o-mini",
+		"gpt-4o-mini-2024-07-18",
 		"gpt-4-turbo",
                 "gpt-3.5-turbo-16k",
                 "gpt-4",
                 "gpt-4-32k",
-            ], index=2)
+            ], index=1)
 
         with st.popover("⚙️ Model parameters"):
             model_temp = st.slider("Temperature", min_value=0.0, max_value=2.0, value=0.3, step=0.1)
