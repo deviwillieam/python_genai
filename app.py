@@ -8,6 +8,12 @@ import base64
 from io import BytesIO
 from PyPDF2 import PdfReader
 from dotenv import load_dotenv
+from langchain.text_splitter import CharacterTextSplitter
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain.chains.question_answering import load_qa_chain
+from langchain_community.llms import OpenAI
+from langchain_community.callbacks.manager import get_openai_callback
 
 # Load environment variables from .env file
 load_dotenv()
@@ -36,13 +42,11 @@ def stream_llm_response(client, model_params):
             }
         ]})
 
-
 # Function to convert file to base64
 def get_image_base64(image_raw):
     buffered = BytesIO()
     image_raw.save(buffered, format=image_raw.format)
     img_byte = buffered.getvalue()
-
     return base64.b64encode(img_byte).decode('utf-8')
 
 # Function to convert file to base64
@@ -58,9 +62,7 @@ def extract_text_from_pdf(pdf_file):
         text += page.extract_text()
     return text
 
-
 def main():
-
     # --- Page Config ---
     st.set_page_config(
         page_title="Willieam Assistant",
@@ -73,11 +75,8 @@ def main():
     st.html("""<h1 style="text-align: center; color: #6ca395;"><i>Willieam Assistant</i></h1>""")
 
     # --- Side Bar ---
-
     with st.sidebar:
         st.image("itb_black.png", width=200)
-        # default_openai_api_key = os.getenv("OPENAI_API_KEY") if os.getenv("OPENAI_API_KEY") is not None else ""  # only for development environment, otherwise it should return None
-        # Define the correct password
         api_key = os.getenv("OPENAI_API_KEY")
         correct_password = os.getenv("CORRECT_PASSWORD")
 
@@ -88,15 +87,15 @@ def main():
         if password_input == correct_password:
             with st.expander("🔐 AI Settings"):
                 with st.container():
-                    openai_api_key = st.text_input("Input API (https://platform.openai.com/)", value=api_key,
-                                                   type="password")
+                    openai_api_key = st.text_input("Input API (https://platform.openai.com/)", value=api_key, type="password")
         else:
             st.warning("Incorrect password. Please try again.")
+
         with st.popover("✨ Model"):
             model = st.selectbox("Select a model:", [
                 "gpt-4o-2024-05-13",
-		"gpt-4o-mini-2024-07-18",
-		"gpt-4-turbo",
+                "gpt-4o-mini-2024-07-18",
+                "gpt-4-turbo",
                 "gpt-3.5-turbo-16k",
                 "gpt-4",
                 "gpt-4-32k",
@@ -113,7 +112,6 @@ def main():
     if openai_api_key == "" or openai_api_key is None or "sk-" not in openai_api_key:
         st.write("#")
         st.warning("⬅️ Please introduce your OpenAI API Key (make sure to have funds) to continue...")
-
 
     else:
         client = OpenAI(api_key=openai_api_key)
@@ -132,18 +130,15 @@ def main():
 
         # Side bar model options and inputs
         with st.sidebar:
-            # st.divider()
-            # Image Upload
             if model in ["gpt-4o-2024-05-13", "gpt-4-turbo"]:
-
                 audio_response = st.toggle("Audio response", value=False)
                 if audio_response:
                     cols = st.columns(2)
                     with cols[0]:
-                        tts_voice = st.selectbox("Select a voice:",
-                                                 ["alloy", "echo", "fable", "onyx", "nova", "shimmer"])
+                        tts_voice = st.selectbox("Select a voice:", ["alloy", "echo", "fable", "onyx", "nova", "shimmer"])
                     with cols[1]:
                         tts_model = st.selectbox("Select a model:", ["tts-1", "tts-1-hd"], index=1)
+
                 st.write("### **🖼️ Add an image:**")
                 def add_image_to_messages():
                     if st.session_state.uploaded_img or ("camera_img" in st.session_state and st.session_state.camera_img):
@@ -198,7 +193,6 @@ def main():
 
                 audio_prompt = transcript.text
 
-
             def reset_conversation():
                 if "messages" in st.session_state and len(st.session_state.messages) > 0:
                     st.session_state.pop("messages", None)
@@ -209,8 +203,6 @@ def main():
             )
 
             st.divider()
-            # st.video("https://www.youtube.com/")
-            # st.write("📋[Arme Studios](https://armestudios.co.id)")
             st.write("### **📄 Upload a PDF file:**")
             uploaded_pdf = st.file_uploader("Upload a PDF file", type=["pdf"])
 
@@ -239,6 +231,32 @@ def main():
                 # Display extracted text
                 st.write("### **Extracted Text from PDF:**")
                 st.write(pdf_text)
+
+                # Split text into chunks
+                text_splitter = CharacterTextSplitter(
+                    separator="\n",
+                    chunk_size=1000,
+                    chunk_overlap=200,
+                    length_function=len
+                )
+                chunks = text_splitter.split_text(pdf_text)
+
+                # Create embeddings and knowledge base
+                embeddings = OpenAIEmbeddings()
+                knowledge_base = FAISS.from_texts(chunks, embeddings)
+
+                # User question input
+                user_question = st.text_input("Ask a question about your PDF:")
+                if user_question:
+                    docs = knowledge_base.similarity_search(user_question)
+
+                    llm = OpenAI()
+                    chain = load_qa_chain(llm, chain_type="stuff")
+                    with get_openai_callback() as cb:
+                        response = chain.run(input_documents=docs, question=user_question)
+                        print(cb)
+
+                    st.write(response)
 
         # Chat input
         if prompt := st.chat_input("Hi Boss need helps?...") or audio_prompt:
@@ -276,7 +294,5 @@ def main():
                 """
                 st.html(audio_html)
 
-
 if __name__ == "__main__":
     main()
-
