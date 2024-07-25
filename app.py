@@ -204,48 +204,29 @@ def main():
 
             st.divider()
             st.write("### **📄 Upload a PDF file:**")
-            uploaded_pdf = st.file_uploader("Upload a PDF file", type=["pdf"])
+            pdf = st.file_uploader("Upload a PDF file", type=["pdf"])
 
-            if uploaded_pdf is not None:
+            if pdf is not None:
                 st.write("PDF successfully uploaded!")
 
                 # Display uploaded PDF
-                pdf_bytes = BytesIO(uploaded_pdf.read())
-                st.write("### **PDF Preview:**")
-                st.write(pdf_bytes)
+                pdf_reader = PdfReader(pdf)
+                text = ""
 
-                # Extract text from PDF
-                pdf_text = extract_text_from_pdf(pdf_bytes)
+                for page in pdf_reader.pages:
+                    text += page.extract_text()
 
-                # Add PDF text to messages
-                st.session_state.messages.append(
-                    {
-                        "role": "user",
-                        "content": [{
-                            "type": "text",
-                            "text": pdf_text,
-                        }]
-                    }
-                )
-
-                # Display extracted text
-                st.write("### **Extracted Text from PDF:**")
-                st.write(pdf_text)
-
-                # Split text into chunks
                 text_splitter = CharacterTextSplitter(
                     separator="\n",
                     chunk_size=1000,
                     chunk_overlap=200,
                     length_function=len
                 )
-                chunks = text_splitter.split_text(pdf_text)
+                chunks = text_splitter.split_text(text)
 
-                # Create embeddings and knowledge base
                 embeddings = OpenAIEmbeddings()
                 knowledge_base = FAISS.from_texts(chunks, embeddings)
 
-                # User question input
                 user_question = st.text_input("Ask a question about your PDF:")
                 if user_question:
                     docs = knowledge_base.similarity_search(user_question)
@@ -256,7 +237,32 @@ def main():
                         response = chain.run(input_documents=docs, question=user_question)
                         print(cb)
 
-                    st.write(response)
+
+                        # Split text into chunks
+                        text_splitter = CharacterTextSplitter(
+                            separator="\n",
+                            chunk_size=1000,
+                            chunk_overlap=200,
+                            length_function=len
+                        )
+                        chunks = text_splitter.split_text(pdf_text)
+
+                        # Create embeddings and knowledge base
+                        embeddings = OpenAIEmbeddings()
+                        knowledge_base = FAISS.from_texts(chunks, embeddings)
+
+                        # User question input
+                        user_question = st.text_input("Ask a question about your PDF:")
+                        if user_question:
+                            docs = knowledge_base.similarity_search(user_question)
+
+                            llm = OpenAI()
+                            chain = load_qa_chain(llm, chain_type="stuff")
+                            with get_openai_callback() as cb:
+                                response = chain.run(input_documents=docs, question=user_question)
+                                print(cb)
+
+                            st.write(response)
 
         # Chat input
         if prompt := st.chat_input("Hi Boss need helps?...") or audio_prompt:
