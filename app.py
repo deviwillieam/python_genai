@@ -271,7 +271,7 @@ def main():
                                     "role": "user",
                                     "content": [{
                                         "type": "text",
-                                        "text": response,
+                                        "text": pdf_text,
                                     }]
                                 }
                             )
