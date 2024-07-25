@@ -262,7 +262,23 @@ def main():
                                 response = chain.run(input_documents=docs, question=user_question)
                                 print(cb)
 
-                            st.write(response)
+                           # Extract text from PDF
+                            pdf_text = extract_text_from_pdf(response)
+
+                            # Add PDF text to messages
+                            st.session_state.messages.append(
+                                {
+                                    "role": "user",
+                                    "content": [{
+                                        "type": "text",
+                                        "text": response,
+                                    }]
+                                }
+                            )
+
+                            # Display extracted text
+                            st.write("### **Extracted Text from PDF:**")
+                            st.write(pdf_text)
 
         # Chat input
         if prompt := st.chat_input("Hi Boss need helps?...") or audio_prompt:
