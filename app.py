@@ -94,9 +94,11 @@ def main():
             st.warning("Incorrect password. Please try again.")
         with st.popover("✨ Model"):
             model = st.selectbox("Select a model:", [
+                "o1-mini-2024-09-12",
+                "o1-preview",
                 "gpt-4o-2024-05-13",
-		"gpt-4o-mini-2024-07-18",
-		"gpt-4-turbo",
+		        "gpt-4o-mini-2024-07-18",
+		        "gpt-4-turbo",
                 "gpt-3.5-turbo-16k",
                 "gpt-4",
                 "gpt-4-32k",
