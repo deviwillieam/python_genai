@@ -89,8 +89,10 @@ def main():
     if not api_key or "sk-" not in api_key:
         st.warning("⬅️ Please provide a valid API Key to continue...")
     else:
-        base_url = "https://api.deepseek.com" if "deepseek" in model else None
-        client = OpenAI(api_key=api_key, base_url=base_url)
+        if "deepseek" in model:
+    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com/v1")  # Correct API base URL
+else:
+    client = OpenAI(api_key=api_key)
 
         if "messages" not in st.session_state:
             st.session_state.messages = []
