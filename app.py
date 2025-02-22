@@ -13,20 +13,22 @@ from dotenv import load_dotenv
 load_dotenv()
 dotenv.load_dotenv()
 
-# Function to initialize the OpenAI or DeepSeek client
-def get_client(api_key, provider):
-    if provider == "deepseek":
-        return OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
-    return OpenAI(api_key=api_key)
+# Retrieve API keys from Streamlit secrets
+api_keys = {
+    "openai": st.secrets["OPENAI_API_KEY"],
+    "deepseek": st.secrets["Deepseek_API_KEY"]
+}
+
+correct_password = st.secrets["CORRECT_PASSWORD"]
 
 # Function to query and stream the response from the LLM
 def stream_llm_response(client, model_params):
     response_message = ""
-    
+
     for chunk in client.chat.completions.create(
         model=model_params["model"],
         messages=st.session_state.messages,
-        temperature=model_params.get("temperature", 0.3),
+        temperature=model_params["temperature"],
         max_tokens=4096,
         stream=True,
     ):
@@ -38,61 +40,77 @@ def stream_llm_response(client, model_params):
         "content": [{"type": "text", "text": response_message}]
     })
 
+# Function to convert file to base64
+def get_image_base64(image_raw):
+    buffered = BytesIO()
+    image_raw.save(buffered, format=image_raw.format)
+    img_byte = buffered.getvalue()
+    return base64.b64encode(img_byte).decode('utf-8')
+
 # Function to extract text from PDF
 def extract_text_from_pdf(pdf_file):
     pdf_reader = PdfReader(pdf_file)
-    text = "".join(page.extract_text() for page in pdf_reader.pages if page.extract_text())
+    text = "".join(page.extract_text() for page in pdf_reader.pages)
     return text
 
-
 def main():
-    st.set_page_config(page_title="Willieam Assistant", page_icon="😎", layout="centered")
-    
+    st.set_page_config(
+        page_title="Willieam Assistant",
+        page_icon="😎",
+        layout="centered",
+        initial_sidebar_state="expanded",
+    )
+
     st.html("""<h1 style="text-align: center; color: #6ca395;"><i>Willieam Assistant</i></h1>""")
-    
+
     with st.sidebar:
         st.image("itb_black.png", width=200)
-        
-        api_key = os.getenv("OPENAI_API_KEY")
-        deepseek_api_key = os.getenv("DEEPSEEK_API_KEY")
-        
-        provider = st.radio("Select AI Provider:", ["OpenAI", "DeepSeek"], index=0).lower()
-        
-        if provider == "deepseek":
-            openai_api_key = deepseek_api_key
+
+        password_input = st.text_input("Enter Password to Access AI Settings", type="password")
+
+        if password_input == correct_password:
+            with st.expander("🔐 AI Settings"):
+                with st.container():
+                    model_provider = st.selectbox("Select Model Provider", ["OpenAI", "DeepSeek"])
+                    api_key = api_keys["openai"] if model_provider == "OpenAI" else api_keys["deepseek"]
+                    st.text_input("API Key", value=api_key, type="password")
         else:
-            openai_api_key = api_key
-        
-        if not openai_api_key:
-            st.warning("⬅️ Please enter your API key to continue...")
-            return
-        
-        client = get_client(openai_api_key, provider)
-        
-        model_list = {
-            "openai": ["gpt-4o-2024-05-13", "gpt-4o-mini-2024-07-18", "gpt-4-turbo", "gpt-3.5-turbo-16k"],
-            "deepseek": ["deepseek-chat", "deepseek-reasoner"]
-        }
-        
-        model = st.selectbox("Select a model:", model_list[provider], index=0)
-        model_temp = st.slider("Temperature", 0.0, 2.0, 0.3, 0.1)
+            st.warning("Incorrect password. Please try again.")
+
+        model = st.selectbox("Select a model:", [
+            "gpt-4o-2024-05-13", "gpt-4o-mini-2024-07-18", "gpt-4-turbo", "gpt-3.5-turbo-16k",
+            "gpt-4", "gpt-4-32k", "deepseek-chat", "deepseek-reasoner"
+        ], index=1)
+
+        model_temp = st.slider("Temperature", min_value=0.0, max_value=2.0, value=0.3, step=0.1)
+
         model_params = {"model": model, "temperature": model_temp}
-    
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.write(message["content"][0]["text"])
-    
-    if prompt := st.chat_input("Hi Boss, need help?"):
-        st.session_state.messages.append({"role": "user", "content": [{"type": "text", "text": prompt}]})
-        
-        with st.chat_message("user"):
-            st.markdown(prompt)
-        
-        with st.chat_message("assistant"):
-            st.write_stream(stream_llm_response(client, model_params))
+
+    if not api_key or "sk-" not in api_key:
+        st.warning("⬅️ Please provide a valid API Key to continue...")
+    else:
+        base_url = "https://api.deepseek.com" if "deepseek" in model else None
+        client = OpenAI(api_key=api_key, base_url=base_url)
+
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                for content in message["content"]:
+                    if content["type"] == "text":
+                        st.write(content["text"])
+                    elif content["type"] == "image_url":
+                        st.image(content["image_url"]["url"])
+
+        if prompt := st.chat_input("Hi Boss need help?..."):
+            st.session_state.messages.append({"role": "user", "content": [{"type": "text", "text": prompt}]})
+
+            with st.chat_message("user"):
+                st.markdown(prompt)
+
+            with st.chat_message("assistant"):
+                st.write_stream(stream_llm_response(client, model_params))
 
 if __name__ == "__main__":
     main()
