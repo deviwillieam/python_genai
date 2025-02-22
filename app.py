@@ -88,7 +88,7 @@ def main():
         if password_input == correct_password:
             with st.expander("🔐 AI Settings"):
                 with st.container():
-                    openai_api_key = st.text_input("Input API (https://api.deepseek.com/)", value=api_key,
+                    openai_api_key = st.text_input("Input API (https://api.deepseek.com/v1/)", value=api_key,
                                                    type="password")
         else:
             st.warning("Incorrect password. Please try again.")
