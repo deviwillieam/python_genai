@@ -88,13 +88,13 @@ def main():
         if password_input == correct_password:
             with st.expander("🔐 AI Settings"):
                 with st.container():
-                    openai_api_key = st.text_input("Input API (https://platform.openai.com/)", value=api_key,
+                    openai_api_key = st.text_input("Input API (https://api.deepseek.com/)", value=api_key,
                                                    type="password")
         else:
             st.warning("Incorrect password. Please try again.")
         with st.popover("✨ Model"):
             model = st.selectbox("Select a model:", [
-                "gpt-4o-2024-05-13",
+                "deepseek-reasoner","gpt-4o-2024-05-13",
 		        "gpt-4o-mini-2024-07-18",
 		        "gpt-4-turbo",
                 "gpt-3.5-turbo-16k",
