@@ -86,13 +86,14 @@ def main():
 
         model_params = {"model": model, "temperature": model_temp}
 
-    if not api_key or "sk-" not in api_key:
+    if not api_keys["openai"] or not api_keys["deepseek"]:
         st.warning("⬅️ Please provide a valid API Key to continue...")
     else:
+        # Ensure DeepSeek models use the correct base URL
         if "deepseek" in model:
-    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com/v1")  # Correct API base URL
-else:
-    client = OpenAI(api_key=api_key)
+            client = OpenAI(api_key=api_keys["deepseek"], base_url="https://api.deepseek.com/v1")
+        else:
+            client = OpenAI(api_key=api_keys["openai"])
 
         if "messages" not in st.session_state:
             st.session_state.messages = []
