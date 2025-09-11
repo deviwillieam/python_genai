@@ -95,7 +95,7 @@ def main():
         with st.popover("✨ Model"):
             model = st.selectbox("Select a model:", [
                 "gpt-4.5-preview-2025-02-27",
-		    "gpt-5-thinking-mini",
+		    "gpt-5-mini",
 			"gpt-4o-2024-08-06",
 		    "gpt-4o-2024-05-13",
 		        "gpt-4o-mini-2024-07-18",
