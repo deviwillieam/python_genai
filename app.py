@@ -8,6 +8,9 @@ import base64
 from io import BytesIO
 from PyPDF2 import PdfReader
 from dotenv import load_dotenv
+audio_response = False
+tts_model = None
+tts_voice = None
 
 # Load environment variables from .env file
 load_dotenv()
