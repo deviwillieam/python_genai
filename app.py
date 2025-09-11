@@ -63,7 +63,10 @@ def extract_text_from_pdf(pdf_file):
 
 
 def main():
-
+    global audio_response, tts_model, tts_voice  # if you want to reuse globals
+    audio_response = False
+    tts_model = None
+    tts_voice = None
     # --- Page Config ---
     st.set_page_config(
         page_title="Willieam Assistant",
