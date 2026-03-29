@@ -1,5 +1,5 @@
 import streamlit as st
-from openai import OpenAI, error as openai_error
+from openai import OpenAI
 import dotenv
 import os
 from PIL import Image
@@ -8,7 +8,6 @@ import base64
 from io import BytesIO
 from PyPDF2 import PdfReader
 from dotenv import load_dotenv
-
 audio_response = False
 tts_model = None
 tts_voice = None
@@ -17,60 +16,49 @@ tts_voice = None
 load_dotenv()
 dotenv.load_dotenv()
 
-
+# Function to query and stream the response from the LLM
 def stream_llm_response(client, model_params):
     response_message = ""
 
-    try:
-        for chunk in client.chat.completions.create(
-            model=model_params.get("model", "gpt-4o-2024-05-13"),
-            messages=st.session_state.messages,
-            temperature=model_params.get("temperature", 0.3),
-            max_tokens=1000,  # safer token limit, adjust as needed
-            stream=True,
-        ):
-            delta = chunk.choices[0].delta
-            content = delta.get("content", "") if isinstance(delta, dict) else ""
-            response_message += content
-            yield content
+    for chunk in client.chat.completions.create(
+        model=model_params["model"] if "model" in model_params else "gpt-4o-2024-05-13",
+        messages=st.session_state.messages,
+        temperature=model_params["temperature"] if "temperature" in model_params else 0.3,
+        max_tokens=4096,
+        stream=True,
+    ):
+        response_message += chunk.choices[0].delta.content if chunk.choices[0].delta.content else ""
+        yield chunk.choices[0].delta.content if chunk.choices[0].delta.content else ""
 
-        # Append the full assistant message after streaming finishes
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": [
-                {
-                    "type": "text",
-                    "text": response_message,
-                }
-            ]
-        })
-
-    except openai_error.RateLimitError:
-        yield "\n\n**Rate limit exceeded. Please wait before retrying.**\n\n"
-    except Exception as e:
-        yield f"\n\n**Error: {str(e)}**\n\n"
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": [
+            {
+                "type": "text",
+                "text": response_message,
+            }
+        ]})
 
 
+# Function to convert file to base64
 def get_image_base64(image_raw):
     buffered = BytesIO()
-    # Save image as PNG always to avoid format issues
-    image_raw.save(buffered, format="PNG")
+    image_raw.save(buffered, format=image_raw.format)
     img_byte = buffered.getvalue()
+
     return base64.b64encode(img_byte).decode('utf-8')
 
-
+# Function to convert file to base64
 def get_pdf_base64(pdf_file):
     pdf_content = pdf_file.read()
     return base64.b64encode(pdf_content).decode('utf-8')
 
-
+# Function to extract text from PDF
 def extract_text_from_pdf(pdf_file):
     pdf_reader = PdfReader(pdf_file)
     text = ""
     for page in pdf_reader.pages:
-        page_text = page.extract_text()
-        if page_text:
-            text += page_text
+        text += page.extract_text()
     return text
 
 
@@ -79,7 +67,7 @@ def main():
     audio_response = False
     tts_model = None
     tts_voice = None
-
+    # --- Page Config ---
     st.set_page_config(
         page_title="Willieam Assistant",
         page_icon="😎",
@@ -87,43 +75,43 @@ def main():
         initial_sidebar_state="expanded",
     )
 
-    st.markdown("""<h1 style="text-align: center; color: #6ca395;"><i>Willieam Assistant</i></h1>""", unsafe_allow_html=True)
+    # --- Header ---
+    st.html("""<h1 style="text-align: center; color: #6ca395;"><i>Willieam Assistant</i></h1>""")
 
-    # Load API key and password from environment at the start of main()
-    api_key_env = os.getenv("OPENAI_API_KEY")
-    correct_password = os.getenv("CORRECT_PASSWORD")
-
-    openai_api_key = None  # to be set after password input
+    # --- Side Bar ---
 
     with st.sidebar:
         st.image("itb_black.png", width=200)
+        # default_openai_api_key = os.getenv("OPENAI_API_KEY") if os.getenv("OPENAI_API_KEY") is not None else ""  # only for development environment, otherwise it should return None
+        # Define the correct password
+        api_key = os.getenv("OPENAI_API_KEY")
+        correct_password = os.getenv("CORRECT_PASSWORD")
 
+        # Prompt the user for the password
         password_input = st.text_input("Enter Password to Access AI Settings", type="password")
 
+        # Check if the entered password matches the correct password
         if password_input == correct_password:
-            with st.expander("🔐 AI Settings", expanded=True):
-                openai_api_key = st.text_input(
-                    "Input OpenAI API Key (https://platform.openai.com/)",
-                    value=api_key_env if api_key_env else "",
-                    type="password"
-                )
-        elif password_input != "":
+            with st.expander("🔐 AI Settings"):
+                with st.container():
+                    openai_api_key = st.text_input("Input API (https://platform.openai.com/)", value=api_key,
+                                                   type="password")
+        else:
             st.warning("Incorrect password. Please try again.")
-
-        with st.expander("✨ Model Selection"):
+        with st.popover("✨ Model"):
             model = st.selectbox("Select a model:", [
                 "gpt-4.5-preview-2025-02-27",
-                "gpt-5.1",
-                "gpt-4o-2024-08-06",
-                "gpt-4o-2024-05-13",
-                "gpt-4o-mini-2024-07-18",
-                "gpt-4-turbo",
+			"gpt-5.1",
+			"gpt-4o-2024-08-06",
+		    "gpt-4o-2024-05-13",
+		        "gpt-4o-mini-2024-07-18",
+		        "gpt-4-turbo",
                 "gpt-3.5-turbo-16k",
                 "gpt-4",
                 "gpt-4-32k",
             ], index=1)
 
-        with st.expander("⚙️ Model Parameters"):
+        with st.popover("⚙️ Model parameters"):
             model_temp = st.slider("Temperature", min_value=0.0, max_value=2.0, value=0.3, step=0.1)
 
         model_params = {
@@ -131,179 +119,171 @@ def main():
             "temperature": model_temp,
         }
 
-    if not openai_api_key or not openai_api_key.startswith("sk-"):
+    if openai_api_key == "" or openai_api_key is None or "sk-" not in openai_api_key:
+        st.write("#")
         st.warning("⬅️ Please introduce your OpenAI API Key (make sure to have funds) to continue...")
-        return
 
-    client = OpenAI(api_key=openai_api_key)
 
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+    else:
+        client = OpenAI(api_key=openai_api_key)
 
-    # Display existing messages
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            for content in message["content"]:
-                if content["type"] == "text":
-                    st.write(content["text"])
-                elif content["type"] == "image_url":
-                    st.image(content["image_url"]["url"])
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
 
-    # Sidebar additional features: Image upload, audio input, PDF upload
-    with st.sidebar:
-        # Image upload for specific models
-        if model in ["gpt-4o-2024-05-13", "gpt-4-turbo"]:
-            audio_response = st.checkbox("Audio response", value=False)
+        # Displaying the previous messages if there are any
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                for content in message["content"]:
+                    if content["type"] == "text":
+                        st.write(content["text"])
+                    elif content["type"] == "image_url":
+                        st.image(content["image_url"]["url"])
 
-            if audio_response:
-                cols = st.columns(2)
-                with cols[0]:
-                    tts_voice = st.selectbox("Select a voice:", ["alloy", "echo", "fable", "onyx", "nova", "shimmer"])
-                with cols[1]:
-                    tts_model = st.selectbox("Select a TTS model:", ["tts-1", "tts-1-hd"], index=1)
+        # Side bar model options and inputs
+        with st.sidebar:
+            # st.divider()
+            # Image Upload
+            if model in ["gpt-4o-2024-05-13", "gpt-4-turbo"]:
 
-            st.markdown("### **🖼️ Add an image:**")
+                audio_response = st.toggle("Audio response", value=False)
+                if audio_response:
+                    cols = st.columns(2)
+                    with cols[0]:
+                        tts_voice = st.selectbox("Select a voice:",
+                                                 ["alloy", "echo", "fable", "onyx", "nova", "shimmer"])
+                    with cols[1]:
+                        tts_model = st.selectbox("Select a model:", ["tts-1", "tts-1-hd"], index=1)
+                st.write("### **🖼️ Add an image:**")
+                def add_image_to_messages():
+                    if st.session_state.uploaded_img or ("camera_img" in st.session_state and st.session_state.camera_img):
+                        img_type = st.session_state.uploaded_img.type if st.session_state.uploaded_img else "image/jpeg"
+                        raw_img = Image.open(st.session_state.uploaded_img or st.session_state.camera_img)
+                        img = get_image_base64(raw_img)
+                        st.session_state.messages.append(
+                            {
+                                "role": "user",
+                                "content": [{
+                                    "type": "image_url",
+                                    "image_url": {"url": f"data:{img_type};base64,{img}"}
+                                }]
+                            }
+                        )
+                cols_img = st.columns(2)
 
-            def add_image_to_messages():
-                uploaded_img = st.session_state.get("uploaded_img")
-                camera_img = st.session_state.get("camera_img")
-                if uploaded_img or camera_img:
-                    img_file = uploaded_img or camera_img
-                    img_type = img_file.type if uploaded_img else "image/jpeg"
-                    raw_img = Image.open(img_file)
-                    img_b64 = get_image_base64(raw_img)
-                    st.session_state.messages.append({
-                        "role": "user",
-                        "content": [{
-                            "type": "image_url",
-                            "image_url": {"url": f"data:{img_type};base64,{img_b64}"}
-                        }]
-                    })
+                with cols_img[0]:
+                    with st.popover("📁 Upload"):
+                        st.file_uploader(
+                            "Upload an image",
+                            type=["png", "jpg", "jpeg"],
+                            accept_multiple_files=False,
+                            key="uploaded_img",
+                            on_change=add_image_to_messages,
+                        )
 
-            cols_img = st.columns(2)
-            with cols_img[0]:
-                uploaded_img = st.file_uploader(
-                    "Upload an image",
-                    type=["png", "jpg", "jpeg"],
-                    key="uploaded_img",
-                    on_change=add_image_to_messages,
-                    help="Upload an image file"
+                with cols_img[1]:
+                    with st.popover("📸 Camera"):
+                        activate_camera = st.checkbox("Activate camera")
+                        if activate_camera:
+                            st.camera_input(
+                                "Take a picture",
+                                key="camera_img",
+                                on_change=add_image_to_messages,
+                            )
+            st.divider()
+            # Audio Upload
+            st.write("### **🎤 Voice Input:**")
+
+            audio_prompt = None
+            if "prev_speech_hash" not in st.session_state:
+                st.session_state.prev_speech_hash = None
+
+            speech_input = audio_recorder("Press to talk:", icon_size="3x", neutral_color="#6ca395", )
+            if speech_input and st.session_state.prev_speech_hash != hash(speech_input):
+                st.session_state.prev_speech_hash = hash(speech_input)
+                transcript = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=("audio.wav", speech_input),
                 )
-            with cols_img[1]:
-                activate_camera = st.checkbox("Activate camera")
-                if activate_camera:
-                    camera_img = st.camera_input(
-                        "Take a picture",
-                        key="camera_img",
-                        on_change=add_image_to_messages,
-                    )
 
-        st.markdown("---")
+                audio_prompt = transcript.text
 
-        # Audio input via microphone recording
-        st.markdown("### **🎤 Voice Input:**")
 
-        audio_prompt = None
-        if "prev_speech_hash" not in st.session_state:
-            st.session_state.prev_speech_hash = None
+            def reset_conversation():
+                if "messages" in st.session_state and len(st.session_state.messages) > 0:
+                    st.session_state.pop("messages", None)
 
-        speech_input = audio_recorder("Press to talk:", icon_size="3x", neutral_color="#6ca395")
-        if speech_input and hash(speech_input) != st.session_state.prev_speech_hash:
-            st.session_state.prev_speech_hash = hash(speech_input)
-            transcript = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=("audio.wav", speech_input),
+            st.button(
+                "🗑️ Reset conversation",
+                on_click=reset_conversation,
             )
-            audio_prompt = transcript.text
 
-        def reset_conversation():
-            if "messages" in st.session_state:
-                st.session_state.pop("messages", None)
+            st.divider()
+            # st.video("https://www.youtube.com/")
+            # st.write("📋[Arme Studios](https://armestudios.co.id)")
+            st.write("### **📄 Upload a PDF file:**")
+            uploaded_pdf = st.file_uploader("Upload a PDF file", type=["pdf"])
 
-        st.button(
-            "🗑️ Reset conversation",
-            on_click=reset_conversation,
-        )
+            if uploaded_pdf is not None:
+                st.write("PDF successfully uploaded!")
 
-        st.markdown("---")
+                # Display uploaded PDF
+                pdf_bytes = BytesIO(uploaded_pdf.read())
+                st.write("### **PDF Preview:**")
+                st.write(pdf_bytes)
 
-        # PDF upload and text extraction
-        st.markdown("### **📄 Upload a PDF file:**")
-        uploaded_pdf = st.file_uploader("Upload a PDF file", type=["pdf"])
+                # Extract text from PDF
+                pdf_text = extract_text_from_pdf(pdf_bytes)
 
-        if uploaded_pdf is not None:
-            # Need to reset buffer position after reading for PyPDF2
-            uploaded_pdf.seek(0)
-            pdf_text = extract_text_from_pdf(uploaded_pdf)
-
-            if pdf_text.strip() == "":
-                st.warning("No extractable text found in the PDF.")
-            else:
-                # Add PDF text as user message once
-                if len(st.session_state.messages) == 0 or \
-                   (st.session_state.messages[-1]["content"][0].get("text") != pdf_text):
-                    st.session_state.messages.append({
+                # Add PDF text to messages
+                st.session_state.messages.append(
+                    {
                         "role": "user",
                         "content": [{
                             "type": "text",
                             "text": pdf_text,
                         }]
-                    })
+                    }
+                )
 
-                st.markdown("### **Extracted Text from PDF:**")
+                # Display extracted text
+                st.write("### **Extracted Text from PDF:**")
                 st.write(pdf_text)
 
-    # Chat input and send message to the model
-    user_prompt = st.chat_input("Hi Boss need helps?...")
-    
-    if user_prompt or audio_prompt:
-        prompt_text = user_prompt if user_prompt else audio_prompt
+        # Chat input
+        if prompt := st.chat_input("Hi Boss need helps?...") or audio_prompt:
+            st.session_state.messages.append(
+                {
+                    "role": "user",
+                    "content": [{
+                        "type": "text",
+                        "text": prompt or audio_prompt,
+                    }]
+                }
+            )
 
-        # Append user message to session state messages
-        st.session_state.messages.append({
-            "role": "user",
-            "content": [{
-                "type": "text",
-                "text": prompt_text,
-            }]
-        })
+            # Displaying the new messages
+            with st.chat_message("user"):
+                st.markdown(prompt)
 
-        # Show user message in chat UI
-        with st.chat_message("user"):
-            st.markdown(prompt_text)
+            with st.chat_message("assistant"):
+                st.write_stream(
+                    stream_llm_response(client, model_params)
+                )
 
-        # Placeholder for assistant response stream
-        assistant_message_placeholder = st.empty()
-
-        assistant_full_response = ""
-
-        with st.chat_message("assistant"):
-            for chunk in stream_llm_response(client, model_params):
-                assistant_full_response += chunk
-                # Update the message incrementally as it streams
-                assistant_message_placeholder.markdown(assistant_full_response + "▌")
-
-            # Final update without cursor symbol after streaming ends
-            assistant_message_placeholder.markdown(assistant_full_response)
-
-        # Optional: Convert assistant response text to speech and play audio
-        if audio_response and assistant_full_response.strip() != "":
-            try:
-                response_audio = client.audio.speech.create(
+            # --- Added Audio Response (optional) ---
+            if audio_response:
+                response =  client.audio.speech.create(
                     model=tts_model,
                     voice=tts_voice,
-                    input=assistant_full_response,
+                    input=st.session_state.messages[-1]["content"][0]["text"],
                 )
-                audio_base64 = base64.b64encode(response_audio.content).decode('utf-8')
+                audio_base64 = base64.b64encode(response.content).decode('utf-8')
                 audio_html = f"""
-                    <audio controls autoplay>
-                        <source src="data:audio/wav;base64,{audio_base64}" type="audio/wav">
-                        Your browser does not support the audio element.
-                    </audio>
-                    """
-                st.markdown(audio_html, unsafe_allow_html=True)
-            except Exception as e:
-                st.error(f"Audio generation error: {e}")
+                <audio controls autoplay>
+                    <source src="data:audio/wav;base64,{audio_base64}" type="audio/mp3">
+                </audio>
+                """
+                st.html(audio_html)
 
 
 if __name__ == "__main__":
